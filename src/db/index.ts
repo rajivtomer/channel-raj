@@ -10,10 +10,13 @@ const MIGRATIONS = path.join(process.cwd(), "drizzle");
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
   if (url) {
+    // postgres-js forwards unknown URL params to the server; Neon's channel_binding is a libpq-only option.
+    const clean = new URL(url);
+    clean.searchParams.delete("channel_binding");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const { migrate } = await import("drizzle-orm/postgres-js/migrator");
     const postgres = (await import("postgres")).default;
-    const db = drizzle(postgres(url, { max: 10, prepare: false }), { schema });
+    const db = drizzle(postgres(clean.toString(), { max: 10, prepare: false }), { schema });
     await migrate(db, { migrationsFolder: MIGRATIONS });
     return db;
   }
