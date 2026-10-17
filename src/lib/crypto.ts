@@ -19,8 +19,12 @@ function loadKey(): Buffer {
     }
     raw = fs.readFileSync(file, "utf8").trim();
   }
-  const key = Buffer.from(raw, "base64");
-  if (key.length !== 32) throw new Error("ENCRYPTION_KEY must be 32 bytes encoded as base64.");
+  let key = Buffer.from(raw, "base64");
+  if (key.length !== 32) {
+    // Accept any long random string (hex, passphrase-style generators) by hashing it to 32 bytes.
+    if (raw.length < 32) throw new Error("ENCRYPTION_KEY must be at least 32 characters.");
+    key = createHash("sha256").update(raw).digest();
+  }
   cachedKey = key;
   return key;
 }
