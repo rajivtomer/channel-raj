@@ -1,10 +1,10 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { META_GRAPH_VERSION, META_SCOPES, redirectUri } from "../config";
+import { API, META_GRAPH_VERSION, META_SCOPES, redirectUri } from "../config";
 import { fetchJson, ProviderError } from "./http";
 import type { ChannelSnapshot, DiscoveredChannel, VerifyResult } from "./types";
 
-const graph = (path: string) => `https://graph.facebook.com/${META_GRAPH_VERSION}${path}`;
+export const graph = (path: string) => `${API.graph}${path}`;
 
 interface Creds {
   clientId: string;
@@ -35,7 +35,7 @@ function proof(token: string, secret: string) {
   return createHmac("sha256", secret).update(token).digest("hex");
 }
 
-function authed(url: string, token: string, secret: string) {
+export function authed(url: string, token: string, secret: string) {
   const u = new URL(url);
   u.searchParams.set("access_token", token);
   u.searchParams.set("appsecret_proof", proof(token, secret));
@@ -47,7 +47,7 @@ export async function verifyMeta({ clientId, clientSecret }: Creds): Promise<Ver
   if (!/^\d{6,20}$/.test(clientId)) return { ok: false, message: "App ID should be a number." };
   try {
     const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
-    await fetchJson(`https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token?${params}`);
+    await fetchJson(graph(`/oauth/access_token?${params}`));
     const app = await fetchJson<{ name?: string }>(
       graph(`/${clientId}?fields=name&access_token=${encodeURIComponent(`${clientId}|${clientSecret}`)}`),
     ).catch(() => ({ name: undefined }));

@@ -17,6 +17,20 @@ A multi-user platform for managing YouTube, Instagram and Facebook channels. Eac
   - Health check per channel (or all at once) that confirms the token works and refreshes name, avatar and follower counts. Disconnect revokes the Google grant.
 - Overview dashboard with follower totals per platform and channels needing attention.
 
+## What's in step 2
+
+- **Media library**: drag-and-drop uploads of photos and videos (JPG, PNG, WebP, MP4, MOV up to 1 GB) straight to Vercel Blob.
+- **Composer**: pick channels, media and caption once, then adjust per platform: YouTube title, tags, visibility, category, playlist, custom thumbnail, made-for-kids and subscriber notification; Instagram post/carousel, Reel or Story; Facebook link posts; custom caption and first comment per channel. Live validation of each platform's rules and a preview.
+- **Publishing**: YouTube resumable uploads, Facebook text/link, photo, multi-photo and video posts, Instagram single, carousel, Reel and Story posts (with asynchronous processing handled by the scheduler). Publish now, schedule, or save drafts; per-channel delivery status with links and retry.
+- **Calendar & queue**: month view, upcoming queue, drafts and history.
+- **Channel settings**: per-channel defaults (hashtags, signature, first comment, YouTube defaults) and live profile editing for YouTube (description, keywords) and Facebook Pages (about, description, website, phone). Instagram profile is shown read-only because Instagram's API doesn't allow edits.
+- **Scheduler**: `/api/cron/publish` publishes everything due. It is called by a GitHub Actions workflow every 5 minutes, by a daily Vercel Cron as a backup, and whenever a signed-in user opens the app.
+
+### Extra setup for step 2
+
+1. **File storage**: in Vercel, Storage → Create → Blob, connect it to this project (adds `BLOB_READ_WRITE_TOKEN`), then redeploy.
+2. **Scheduler**: generate a random `CRON_SECRET`, add it in Vercel → Settings → Environment Variables, and in GitHub → Settings → Secrets and variables → Actions as a repository secret with the same name. If your site isn't `https://channel-rajv.vercel.app`, also add a repository variable `APP_URL`.
+
 ## Run locally
 
 ```bash
@@ -50,6 +64,5 @@ drizzle/              SQL migrations
 
 ## Next steps
 
-- Step 2: composer, scheduling calendar and queue, media library, per-channel settings.
 - Step 3: automation (best-time posting, AI captions, repurposing), unified inbox, analytics.
 - Step 4: workspaces, roles and approvals, audit log, notifications, deploy.

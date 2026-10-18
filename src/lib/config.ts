@@ -8,6 +8,13 @@ export function appUrl(): string {
 
 export const META_GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v23.0";
 
+// API hosts. Overridable so the publishing engine can be exercised against a local mock.
+export const API = {
+  graph: (process.env.META_GRAPH_BASE || "https://graph.facebook.com") + "/" + META_GRAPH_VERSION,
+  googleToken: process.env.GOOGLE_TOKEN_URL || "https://oauth2.googleapis.com/token",
+  googleApis: process.env.GOOGLE_API_BASE || "https://www.googleapis.com",
+};
+
 export function redirectUri(provider: Provider): string {
   return `${appUrl()}/api/oauth/${provider}/callback`;
 }

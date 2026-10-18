@@ -1,12 +1,12 @@
 import "server-only";
-import { GOOGLE_SCOPES, redirectUri } from "../config";
+import { API, GOOGLE_SCOPES, redirectUri } from "../config";
 import { fetchJson, ProviderError } from "./http";
 import type { ChannelSnapshot, DiscoveredChannel, VerifyResult } from "./types";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
+const TOKEN_URL = API.googleToken;
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
-const YT = "https://www.googleapis.com/youtube/v3";
+const YT = `${API.googleApis}/youtube/v3`;
 
 interface Creds {
   clientId: string;
