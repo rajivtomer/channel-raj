@@ -1,12 +1,14 @@
 import { ChannelRow } from "@/components/ChannelRow";
 import { CheckAllButton } from "@/components/CheckAllButton";
+import { AiSettingsCard } from "@/components/AiSettingsCard";
 import { CredentialCard, type CredentialView } from "@/components/CredentialCard";
-import type { Provider } from "@/db/schema";
+import type { OAuthProvider } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { listChannels, providerFor } from "@/lib/channels";
 import { PROVIDERS, redirectUri } from "@/lib/config";
 import { decrypt, mask } from "@/lib/crypto";
 import { listCredentials } from "@/lib/credentials";
+import { safeZone } from "@/lib/schedule";
 
 export const metadata = { title: "API & channels" };
 
@@ -18,7 +20,7 @@ export default async function ApiSettingsPage({
   const user = await requireUser();
   const [creds, channels, sp] = await Promise.all([listCredentials(user.id), listChannels(user.id), searchParams]);
 
-  const views: CredentialView[] = (Object.keys(PROVIDERS) as Provider[]).map((provider) => {
+  const views: CredentialView[] = (Object.keys(PROVIDERS) as OAuthProvider[]).map((provider) => {
     const meta = PROVIDERS[provider];
     const row = creds.find((c) => c.provider === provider);
     return {
@@ -38,6 +40,7 @@ export default async function ApiSettingsPage({
     };
   });
 
+  const ai = creds.find((c) => c.provider === "anthropic");
   const n = Number(sp.connected);
   const flash = sp.error
     ? { ok: false, text: sp.error }
@@ -68,6 +71,14 @@ export default async function ApiSettingsPage({
       {views.map((v) => (
         <CredentialCard key={v.provider} view={v} />
       ))}
+
+      <AiSettingsCard
+        view={{
+          saved: ai ? { hint: mask(decrypt(ai.clientSecretEnc)), status: ai.status, message: ai.statusMessage } : null,
+          brandVoice: user.preferences.brandVoice ?? "",
+          timezone: safeZone(user.preferences.timezone),
+        }}
+      />
 
       <section className="card overflow-hidden">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">

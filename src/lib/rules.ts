@@ -88,3 +88,11 @@ export function applyChannelDefaults(caption: string, defaults: { defaultHashtag
   if (tags.length) out += `${out ? "\n\n" : ""}${tags.join(" ")}`;
   return out;
 }
+
+/** Queue slot "d@HH:MM", d = 0 (Sunday) to 6. */
+export const SLOT_RE = /^([0-6])@([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function parseSlot(slot: string) {
+  const m = SLOT_RE.exec(slot);
+  return m ? { weekday: Number(m[1]), hour: Number(m[2]), minute: Number(m[3]) } : null;
+}

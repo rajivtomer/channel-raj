@@ -7,12 +7,12 @@ import {
   saveCredentialAction,
   type ActionResult,
 } from "@/app/actions/settings";
-import type { CredentialStatus, Platform, Provider } from "@/db/schema";
+import type { CredentialStatus, OAuthProvider, Platform } from "@/db/schema";
 import { PlatformIcon } from "./icons";
 import { StatusBadge } from "./StatusBadge";
 
 export interface CredentialView {
-  provider: Provider;
+  provider: OAuthProvider;
   label: string;
   platforms: Platform[];
   clientIdLabel: string;

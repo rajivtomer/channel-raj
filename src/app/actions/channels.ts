@@ -7,6 +7,7 @@ import { getChannelAuth, getChannelForUser, updateChannelSettings } from "@/lib/
 import { getFacebookProfile, updateFacebookProfile } from "@/lib/publish/facebook";
 import { getInstagramProfile } from "@/lib/publish/instagram";
 import { getYouTubeProfile, listPlaylists, updateYouTubeProfile } from "@/lib/publish/youtube";
+import { SLOT_RE } from "@/lib/rules";
 
 async function ownedChannel(channelId: string) {
   const user = await requireUser();
@@ -30,6 +31,7 @@ const settingsSchema = z.object({
   defaultHashtags: z.string().max(1000).optional(),
   captionSuffix: z.string().max(2000).optional(),
   firstComment: z.string().max(2200).optional(),
+  queueSlots: z.array(z.string().regex(SLOT_RE, "Invalid queue time.")).max(100).optional(),
   youtube: z
     .object({
       privacy: z.enum(["public", "unlisted", "private"]).optional(),

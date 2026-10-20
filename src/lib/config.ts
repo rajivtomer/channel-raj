@@ -1,5 +1,5 @@
 import "server-only";
-import type { Platform, Provider } from "@/db/schema";
+import type { OAuthProvider, Platform } from "@/db/schema";
 
 export function appUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
@@ -13,14 +13,18 @@ export const API = {
   graph: (process.env.META_GRAPH_BASE || "https://graph.facebook.com") + "/" + META_GRAPH_VERSION,
   googleToken: process.env.GOOGLE_TOKEN_URL || "https://oauth2.googleapis.com/token",
   googleApis: process.env.GOOGLE_API_BASE || "https://www.googleapis.com",
+  anthropic: process.env.ANTHROPIC_API_BASE || undefined,
 };
 
-export function redirectUri(provider: Provider): string {
+/** The model behind the AI assistant. */
+export const AI_MODEL = "claude-opus-5-5";
+
+export function redirectUri(provider: OAuthProvider): string {
   return `${appUrl()}/api/oauth/${provider}/callback`;
 }
 
 export const PROVIDERS: Record<
-  Provider,
+  OAuthProvider,
   {
     label: string;
     platforms: Platform[];
@@ -71,6 +75,7 @@ export const META_SCOPES = [
   "pages_manage_posts",
   "pages_manage_metadata",
   "pages_manage_engagement",
+  "pages_read_user_content",
   "read_insights",
   "business_management",
   "instagram_basic",

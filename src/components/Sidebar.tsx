@@ -11,13 +11,13 @@ const NAV: { href: string; label: string; soon?: string }[] = [
   { href: "/compose", label: "Compose" },
   { href: "/calendar", label: "Calendar & queue" },
   { href: "/library", label: "Media library" },
-  { href: "/inbox", label: "Inbox", soon: "Step 3" },
-  { href: "/automations", label: "Automations", soon: "Step 3" },
-  { href: "/analytics", label: "Analytics", soon: "Step 3" },
+  { href: "/inbox", label: "Inbox" },
+  { href: "/automations", label: "Automations" },
+  { href: "/analytics", label: "Analytics" },
   { href: "/settings/api", label: "API & channels" },
 ];
 
-export function Sidebar({ user }: { user: { name: string; email: string } }) {
+export function Sidebar({ user, inboxOpen = 0 }: { user: { name: string; email: string }; inboxOpen?: number }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   return (
@@ -54,7 +54,14 @@ export function Sidebar({ user }: { user: { name: string; email: string } }) {
                     active ? "bg-brand/10 text-brand" : "hover:bg-bg"
                   }`}
                 >
-                  {item.label}
+                  <span className="flex items-center justify-between">
+                    {item.label}
+                    {item.href === "/inbox" && inboxOpen > 0 && (
+                      <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-brand-ink tabular-nums">
+                        {inboxOpen > 99 ? "99+" : inboxOpen}
+                      </span>
+                    )}
+                  </span>
                 </Link>
               );
             })}

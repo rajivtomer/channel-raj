@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Platform, Post, PostTarget } from "@/db/schema";
+import { fmtTime } from "@/lib/tzfmt";
 import { PlatformIcon } from "../icons";
 
 export type CalPost = Post & { targets: PostTarget[] };
@@ -26,7 +27,7 @@ export const STATUS_LABEL: Record<Post["status"], string> = {
 
 export const postTime = (p: CalPost) => new Date(p.publishedAt ?? p.scheduledAt ?? p.updatedAt);
 
-export function PostChip({ post, platforms, compact }: { post: CalPost; platforms: Record<string, Platform>; compact?: boolean }) {
+export function PostChip({ post, platforms, compact, tz }: { post: CalPost; platforms: Record<string, Platform>; compact?: boolean; tz: string }) {
   const icons = [...new Set(post.targets.map((t) => platforms[t.channelId]).filter(Boolean))] as Platform[];
   return (
     <Link
@@ -35,7 +36,7 @@ export function PostChip({ post, platforms, compact }: { post: CalPost; platform
       title={`${STATUS_LABEL[post.status]} · ${post.caption.slice(0, 80)}`}
     >
       <span className={`size-1.5 shrink-0 rounded-full ${STATUS_DOT[post.status]}`} />
-      <span className="tabular-nums text-muted">{postTime(post).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+      <span className="tabular-nums text-muted">{fmtTime(postTime(post), tz)}</span>
       {!compact && <span className="min-w-0 flex-1 truncate">{post.caption || "No caption"}</span>}
       <span className="ml-auto flex shrink-0 -space-x-1">
         {icons.map((p) => <PlatformIcon key={p} platform={p} className="size-3" />)}
