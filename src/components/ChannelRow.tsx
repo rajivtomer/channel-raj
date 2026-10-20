@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { checkChannelAction, disconnectChannelAction } from "@/app/actions/settings";
 import type { PublicChannel } from "@/lib/channels";
@@ -41,6 +42,7 @@ export function ChannelRow({ channel, manage = true }: { channel: PublicChannel;
       <StatusBadge tone={tone}>{label}</StatusBadge>
       {manage && (
         <div className="flex gap-2">
+          <Link href={`/channels/${channel.id}`} className="btn-ghost px-2.5 py-1.5 text-xs">Settings</Link>
           <button
             className="btn-ghost px-2.5 py-1.5 text-xs"
             disabled={pending}

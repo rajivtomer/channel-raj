@@ -8,9 +8,9 @@ import { Logo } from "./icons";
 
 const NAV: { href: string; label: string; soon?: string }[] = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/compose", label: "Compose", soon: "Step 2" },
-  { href: "/calendar", label: "Calendar", soon: "Step 2" },
-  { href: "/library", label: "Media library", soon: "Step 2" },
+  { href: "/compose", label: "Compose" },
+  { href: "/calendar", label: "Calendar & queue" },
+  { href: "/library", label: "Media library" },
   { href: "/inbox", label: "Inbox", soon: "Step 3" },
   { href: "/automations", label: "Automations", soon: "Step 3" },
   { href: "/analytics", label: "Analytics", soon: "Step 3" },

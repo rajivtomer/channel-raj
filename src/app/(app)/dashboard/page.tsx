@@ -5,6 +5,8 @@ import type { Platform } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { listChannels } from "@/lib/channels";
 import { listCredentials } from "@/lib/credentials";
+import { listPostsByStatus, postCounts } from "@/lib/posts";
+import { PostList } from "@/components/calendar/CalendarView";
 
 export const metadata = { title: "Overview" };
 
@@ -12,7 +14,14 @@ const fmt = new Intl.NumberFormat("en", { notation: "compact" });
 
 export default async function Dashboard() {
   const user = await requireUser();
-  const [channels, creds] = await Promise.all([listChannels(user.id), listCredentials(user.id)]);
+  const [channels, creds, counts, upcoming] = await Promise.all([
+    listChannels(user.id),
+    listCredentials(user.id),
+    postCounts(user.id),
+    listPostsByStatus(user.id, ["scheduled", "publishing"], 50),
+  ]);
+  const next = upcoming.sort((a, b) => +new Date(a.scheduledAt ?? 0) - +new Date(b.scheduledAt ?? 0)).slice(0, 5);
+  const platformOf = Object.fromEntries(channels.map((c) => [c.id, c.platform]));
   const platforms: Platform[] = ["youtube", "instagram", "facebook"];
   const needsAttention = channels.filter((c) => c.status !== "connected").length;
 
@@ -24,9 +33,12 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Hi {user.name.split(" ")[0]}</h1>
-        <p className="mt-1 text-sm text-muted">Here’s how your channels look right now.</p>
+      <header className="flex flex-wrap items-end gap-4">
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Hi {user.name.split(" ")[0]}</h1>
+          <p className="mt-1 text-sm text-muted">Here’s how your channels look right now.</p>
+        </div>
+        <Link href="/compose" className="btn-primary">New post</Link>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -48,6 +60,28 @@ export default async function Dashboard() {
           );
         })}
       </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {[
+          { label: "Scheduled", value: counts.scheduled, href: "/calendar?view=queue" },
+          { label: "Drafts", value: counts.drafts, href: "/calendar?view=drafts" },
+          { label: "Published", value: counts.published, href: "/calendar?view=history" },
+          { label: "Need attention", value: counts.failed, href: "/calendar?view=history" },
+        ].map((k) => (
+          <Link key={k.label} href={k.href} className="card p-4 hover:ring-1 hover:ring-brand/30">
+            <p className="text-xs text-muted">{k.label}</p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${k.label === "Need attention" && k.value ? "text-red-600 dark:text-red-400" : ""}`}>{k.value}</p>
+          </Link>
+        ))}
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Up next</h2>
+          <Link href="/calendar" className="text-sm text-brand hover:underline">Open calendar</Link>
+        </div>
+        <PostList posts={next} platforms={platformOf} empty="Nothing scheduled yet." />
+      </section>
 
       {steps.some((s) => !s.done) && (
         <section className="card p-5">

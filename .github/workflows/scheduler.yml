@@ -1,0 +1,23 @@
+name: Publish scheduled posts
+
+# Calls the app every 5 minutes so scheduled posts go out on time, even on
+# Vercel's Hobby plan (whose built-in cron only runs once a day).
+# Setup: add a repository secret CRON_SECRET (same value as in Vercel) and,
+# if your site isn't https://channel-rajv.vercel.app, a repository variable APP_URL.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Run publisher
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://channel-rajv.vercel.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET secret not set; skipping."; exit 0; fi
+          curl -fsS --max-time 320 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/publish"

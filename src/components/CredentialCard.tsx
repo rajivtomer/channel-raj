@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   deleteCredentialAction,
   reverifyCredentialAction,
@@ -37,6 +37,10 @@ export function CredentialCard({ view }: { view: CredentialView }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(!view.saved);
   const shown = note ?? state;
+  // Leave edit mode once a save has gone through, so Connect appears straight away.
+  useEffect(() => {
+    if (state && view.saved) setEditing(false);
+  }, [state, view.saved]);
   const s = view.saved;
   const tone = !s ? "gray" : s.status === "valid" ? "green" : s.status === "invalid" ? "red" : "amber";
   const statusLabel = !s ? "Not set up" : s.status === "valid" ? "Verified" : s.status === "invalid" ? "Invalid" : "Not verified";

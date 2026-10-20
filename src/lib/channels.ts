@@ -1,10 +1,10 @@
 import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import type { Channel, Platform, Provider } from "@/db/schema";
+import type { Channel, ChannelSettings, Platform, Provider } from "@/db/schema";
 import { decrypt, encrypt } from "./crypto";
 import { getDecryptedCredential } from "./credentials";
-import { checkYouTubeChannel, revokeGoogleToken } from "./providers/google";
+import { checkYouTubeChannel, refreshGoogleToken, revokeGoogleToken } from "./providers/google";
 import { ProviderError } from "./providers/http";
 import { checkMetaChannel } from "./providers/meta";
 import type { DiscoveredChannel } from "./providers/types";
@@ -135,4 +135,40 @@ export async function disconnectChannel(userId: string, channelId: string): Prom
     if (!others.length) await revokeGoogleToken(decrypt(channel.refreshTokenEnc));
   }
   await db.delete(schema.channels).where(and(eq(schema.channels.userId, userId), eq(schema.channels.id, channelId)));
+}
+
+export async function getChannelForUser(userId: string, channelId: string) {
+  return getChannel(userId, channelId);
+}
+
+/**
+ * A usable access token for a channel, refreshing (and persisting) YouTube tokens that
+ * are about to expire. Meta Page tokens do not expire.
+ */
+export async function getChannelAuth(channel: Channel) {
+  const creds = await getDecryptedCredential(channel.userId, providerFor(channel.platform));
+  if (!creds) throw new ProviderError("API credentials for this platform were removed. Add them in API & channels.");
+  let accessToken = decrypt(channel.accessTokenEnc);
+  if (channel.platform === "youtube") {
+    const expiring = !channel.tokenExpiresAt || channel.tokenExpiresAt.getTime() < Date.now() + 120_000;
+    if (expiring) {
+      if (!channel.refreshTokenEnc) throw new ProviderError("YouTube access expired. Reconnect the channel.", 401);
+      const fresh = await refreshGoogleToken(creds, decrypt(channel.refreshTokenEnc));
+      accessToken = fresh.accessToken;
+      const db = await getDb();
+      await db
+        .update(schema.channels)
+        .set({ accessTokenEnc: encrypt(fresh.accessToken), tokenExpiresAt: fresh.expiresAt })
+        .where(eq(schema.channels.id, channel.id));
+    }
+  }
+  return { accessToken, creds };
+}
+
+export async function updateChannelSettings(userId: string, channelId: string, settings: ChannelSettings) {
+  const db = await getDb();
+  await db
+    .update(schema.channels)
+    .set({ settings })
+    .where(and(eq(schema.channels.userId, userId), eq(schema.channels.id, channelId)));
 }
