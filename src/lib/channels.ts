@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import type { Channel, ChannelSettings, Platform, Provider } from "@/db/schema";
+import type { Channel, ChannelSettings, OAuthProvider, Platform } from "@/db/schema";
 import { decrypt, encrypt } from "./crypto";
 import { getDecryptedCredential } from "./credentials";
 import { checkYouTubeChannel, refreshGoogleToken, revokeGoogleToken } from "./providers/google";
@@ -9,7 +9,7 @@ import { ProviderError } from "./providers/http";
 import { checkMetaChannel } from "./providers/meta";
 import type { DiscoveredChannel } from "./providers/types";
 
-export const providerFor = (platform: Platform): Provider => (platform === "youtube" ? "google" : "meta");
+export const providerFor = (platform: Platform): OAuthProvider => (platform === "youtube" ? "google" : "meta");
 
 /** Channel without token columns, safe to hand to UI code. */
 export type PublicChannel = Omit<Channel, "accessTokenEnc" | "refreshTokenEnc">;

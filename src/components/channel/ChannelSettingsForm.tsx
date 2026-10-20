@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { getPlaylistsAction, getProfileAction, saveChannelSettingsAction, saveProfileAction, type ProfileData } from "@/app/actions/channels";
 import type { ChannelSettings } from "@/db/schema";
 import type { PublicChannel } from "@/lib/channels";
-import { YOUTUBE_CATEGORIES } from "@/lib/rules";
+import { parseSlot, YOUTUBE_CATEGORIES } from "@/lib/rules";
 
 type Result = { ok: boolean; message: string } | undefined;
 
@@ -52,6 +52,9 @@ export function ChannelSettingsForm({ channel }: { channel: PublicChannel }) {
         <div className="sm:col-span-2">
           <label className="label" htmlFor="fc">Default first comment</label>
           <input id="fc" className="input" value={s.firstComment ?? ""} onChange={(e) => setS({ ...s, firstComment: e.target.value })} />
+        </div>
+        <div className="sm:col-span-2">
+          <QueueSlotsEditor slots={s.queueSlots ?? []} onChange={(queueSlots) => setS({ ...s, queueSlots })} />
         </div>
         {channel.platform === "youtube" && (
           <>
@@ -172,5 +175,58 @@ export function ChannelProfileForm({ channel }: { channel: PublicChannel }) {
         </form>
       )}
     </section>
+  );
+}
+
+// Monday first, as most people read a week.
+const DAYS = [1, 2, 3, 4, 5, 6, 0];
+const DAY_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function QueueSlotsEditor({ slots, onChange }: { slots: string[]; onChange: (s: string[]) => void }) {
+  const [adding, setAdding] = useState<{ day: number; time: string }>({ day: 1, time: "09:00" });
+  const sorted = [...new Set(slots)].filter((x) => parseSlot(x)).sort();
+  const add = (list: string[]) => onChange([...new Set([...sorted, ...list])].sort());
+  return (
+    <fieldset className="rounded-lg border border-line p-4">
+      <legend className="px-1 text-sm font-medium">Posting queue</legend>
+      <p className="mb-3 text-xs text-muted">
+        Times this channel posts each week. “Add to queue” in Compose books the next free one. Times are in your time zone (set in API &amp; channels).
+      </p>
+      <div className="space-y-2">
+        {DAYS.map((d) => {
+          const today = sorted.filter((x) => x.startsWith(`${d}@`));
+          return (
+            <div key={d} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-10 shrink-0 text-xs font-medium text-muted">{DAY_NAME[d]}</span>
+              {today.length ? (
+                today.map((x) => (
+                  <span key={x} className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2.5 py-0.5 text-xs text-brand">
+                    {x.slice(2)}
+                    <button type="button" aria-label={`Remove ${DAY_NAME[d]} ${x.slice(2)}`} onClick={() => onChange(sorted.filter((y) => y !== x))}>✕</button>
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-muted/70">No posts</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div>
+          <label className="label" htmlFor="slot-day">Day</label>
+          <select id="slot-day" className="input w-auto" value={adding.day} onChange={(e) => setAdding({ ...adding, day: Number(e.target.value) })}>
+            {DAYS.map((d) => <option key={d} value={d}>{DAY_NAME[d]}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="slot-time">Time</label>
+          <input id="slot-time" type="time" className="input w-auto" value={adding.time} onChange={(e) => setAdding({ ...adding, time: e.target.value })} />
+        </div>
+        <button type="button" className="btn-ghost" onClick={() => /^\d\d:\d\d$/.test(adding.time) && add([`${adding.day}@${adding.time}`])}>Add time</button>
+        <button type="button" className="btn-ghost" onClick={() => add([1, 2, 3, 4, 5].flatMap((d) => [`${d}@09:00`, `${d}@18:00`]))}>Weekdays 9:00 and 18:00</button>
+        {sorted.length > 0 && <button type="button" className="btn-ghost" onClick={() => onChange([])}>Clear all</button>}
+      </div>
+    </fieldset>
   );
 }

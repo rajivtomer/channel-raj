@@ -9,6 +9,7 @@ import { getMediaByIds } from "@/lib/media";
 import { getPost } from "@/lib/posts";
 import { refreshPostStatus, runPublisher, runTarget } from "@/lib/publish/engine";
 import { validateTarget } from "@/lib/rules";
+import { nextQueueSlot, safeZone } from "@/lib/schedule";
 
 const optionsSchema = z.object({
   youtube: z
@@ -35,13 +36,13 @@ const postSchema = z.object({
   targets: z
     .array(z.object({ channelId: z.string().uuid(), caption: z.string().max(63206).nullable(), options: optionsSchema }))
     .max(50),
-  mode: z.enum(["draft", "schedule", "now"]),
+  mode: z.enum(["draft", "schedule", "now", "queue"]),
   scheduledAt: z.string().datetime().optional(),
 });
 
 export type SavePostInput = z.input<typeof postSchema>;
 export type SavePostResult =
-  | { ok: true; postId: string; message: string }
+  | { ok: true; postId: string; message: string; scheduledAt?: string }
   | { ok: false; message: string; targetErrors?: Record<string, string[]> };
 
 export async function savePostAction(input: SavePostInput): Promise<SavePostResult> {
@@ -52,7 +53,11 @@ export async function savePostAction(input: SavePostInput): Promise<SavePostResu
   const db = await getDb();
 
   if (p.mode !== "draft" && !p.targets.length) return { ok: false, message: "Pick at least one channel." };
-  const scheduledAt = p.mode === "schedule" ? (p.scheduledAt ? new Date(p.scheduledAt) : null) : p.mode === "now" ? new Date() : null;
+  let scheduledAt = p.mode === "schedule" ? (p.scheduledAt ? new Date(p.scheduledAt) : null) : p.mode === "now" ? new Date() : null;
+  if (p.mode === "queue") {
+    scheduledAt = await nextQueueSlot(user.id, p.targets.map((t) => t.channelId), safeZone(user.preferences.timezone));
+    if (!scheduledAt) return { ok: false, message: "None of these channels has queue times yet. Add them in each channel's settings, or pick a time." };
+  }
   if (p.mode === "schedule") {
     if (!scheduledAt) return { ok: false, message: "Pick a date and time." };
     if (scheduledAt.getTime() < Date.now() - 60_000) return { ok: false, message: "That time is in the past." };
@@ -145,6 +150,7 @@ export async function savePostAction(input: SavePostInput): Promise<SavePostResu
     ok: true,
     postId,
     message: p.mode === "draft" ? "Draft saved." : "Scheduled.",
+    scheduledAt: scheduledAt?.toISOString(),
   };
 }
 

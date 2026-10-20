@@ -1,3 +1,4 @@
+import { safeZone } from "@/lib/schedule";
 import { notFound } from "next/navigation";
 import { Composer } from "@/components/compose/Composer";
 import { requireUser } from "@/lib/auth";
@@ -26,7 +27,7 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
         <h1 className="text-2xl font-semibold tracking-tight">{post ? TITLES[post.status] : "Create post"}</h1>
         <p className="mt-1 text-sm text-muted">One post, every channel. Adjust details per platform before it goes out.</p>
       </header>
-      <Composer key={post?.id ?? "new"} channels={channels.filter((c) => c.status === "connected" || post?.targets.some((t) => t.channelId === c.id))} library={library} post={post} userId={user.id} blob={blobEnabled()} initialDate={/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ? date : undefined} flash={post && saved ? saved.slice(0, 200) : undefined} />
+      <Composer key={post?.id ?? "new"} channels={channels.filter((c) => c.status === "connected" || post?.targets.some((t) => t.channelId === c.id))} library={library} post={post} userId={user.id} blob={blobEnabled()} initialDate={/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ? date : undefined} flash={post && saved ? saved.slice(0, 200) : undefined} tz={safeZone(user.preferences.timezone)} />
     </div>
   );
 }

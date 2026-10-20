@@ -5,8 +5,10 @@ import type { Platform } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { listChannels } from "@/lib/channels";
 import { listCredentials } from "@/lib/credentials";
+import { inboxCounts } from "@/lib/inbox";
 import { listPostsByStatus, postCounts } from "@/lib/posts";
 import { PostList } from "@/components/calendar/CalendarView";
+import { safeZone } from "@/lib/schedule";
 
 export const metadata = { title: "Overview" };
 
@@ -14,11 +16,12 @@ const fmt = new Intl.NumberFormat("en", { notation: "compact" });
 
 export default async function Dashboard() {
   const user = await requireUser();
-  const [channels, creds, counts, upcoming] = await Promise.all([
+  const [channels, creds, counts, upcoming, inbox] = await Promise.all([
     listChannels(user.id),
     listCredentials(user.id),
     postCounts(user.id),
     listPostsByStatus(user.id, ["scheduled", "publishing"], 50),
+    inboxCounts(user.id),
   ]);
   const next = upcoming.sort((a, b) => +new Date(a.scheduledAt ?? 0) - +new Date(b.scheduledAt ?? 0)).slice(0, 5);
   const platformOf = Object.fromEntries(channels.map((c) => [c.id, c.platform]));
@@ -61,12 +64,13 @@ export default async function Dashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: "Scheduled", value: counts.scheduled, href: "/calendar?view=queue" },
           { label: "Drafts", value: counts.drafts, href: "/calendar?view=drafts" },
           { label: "Published", value: counts.published, href: "/calendar?view=history" },
           { label: "Need attention", value: counts.failed, href: "/calendar?view=history" },
+          { label: "Open comments", value: inbox.open, href: "/inbox" },
         ].map((k) => (
           <Link key={k.label} href={k.href} className="card p-4 hover:ring-1 hover:ring-brand/30">
             <p className="text-xs text-muted">{k.label}</p>
@@ -80,7 +84,7 @@ export default async function Dashboard() {
           <h2 className="font-semibold">Up next</h2>
           <Link href="/calendar" className="text-sm text-brand hover:underline">Open calendar</Link>
         </div>
-        <PostList posts={next} platforms={platformOf} empty="Nothing scheduled yet." />
+        <PostList posts={next} platforms={platformOf} tz={safeZone(user.preferences.timezone)} empty="Nothing scheduled yet." />
       </section>
 
       {steps.some((s) => !s.done) && (

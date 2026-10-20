@@ -31,6 +31,19 @@ A multi-user platform for managing YouTube, Instagram and Facebook channels. Eac
 1. **File storage**: in Vercel, Storage → Create → Blob, connect it to this project (adds `BLOB_READ_WRITE_TOKEN`), then redeploy.
 2. **Scheduler**: generate a random `CRON_SECRET`, add it in Vercel → Settings → Environment Variables, and in GitHub → Settings → Secrets and variables → Actions as a repository secret with the same name. If your site isn't `https://channel-rajv.vercel.app`, also add a repository variable `APP_URL`.
 
+## What's in step 3
+
+- **AI assistant** (each user adds their own Anthropic API key under API & channels): write or rewrite captions, tailor one post into a version per channel (including YouTube titles and tags), suggest replies to comments, and refresh captions when re-sharing. Brand voice is set once in settings.
+- **Posting queue and best times**: each channel gets weekly queue times; "Add to queue" books the next free slot. Compose suggests the best times from your own engagement history, blended with typical platform windows until you have enough data. All times use your saved time zone.
+- **Unified inbox**: comments from YouTube, Facebook and Instagram in one list, with reply, suggested reply, mark done and hide. Synced every 10 minutes.
+- **Automations**: auto-reply to comments matching keywords (template or AI), auto-hide spam, links or abusive words, and re-share top-performing evergreen posts on a schedule. Every action is logged. Comment rules only act on comments that arrive after the rule is turned on.
+- **Analytics**: audience growth per channel, engagement, views and comments with change versus the previous period, an engagement heatmap by weekday and hour, top posts, and a per-channel table. Stats refresh hourly.
+
+### Extra setup for step 3
+
+1. **AI (optional)**: create a key at console.anthropic.com and paste it under API & channels → AI assistant.
+2. **Facebook comments**: step 3 adds the `pages_read_user_content` permission. Reconnect your Meta account once (API & channels → Connect) so the inbox can read comments on Page posts.
+
 ## Run locally
 
 ```bash
@@ -64,5 +77,4 @@ drizzle/              SQL migrations
 
 ## Next steps
 
-- Step 3: automation (best-time posting, AI captions, repurposing), unified inbox, analytics.
 - Step 4: workspaces, roles and approvals, audit log, notifications, deploy.

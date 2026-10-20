@@ -5,6 +5,7 @@ import type { Provider, ProviderCredential } from "@/db/schema";
 import { decrypt, encrypt } from "./crypto";
 import { verifyGoogle } from "./providers/google";
 import { verifyMeta } from "./providers/meta";
+import { verifyAnthropic } from "./ai";
 
 export async function listCredentials(userId: string): Promise<ProviderCredential[]> {
   const db = await getDb();
@@ -29,6 +30,7 @@ export async function getDecryptedCredential(userId: string, provider: Provider)
 }
 
 export async function verify(provider: Provider, clientId: string, clientSecret: string) {
+  if (provider === "anthropic") return verifyAnthropic(clientSecret);
   return provider === "google" ? verifyGoogle({ clientId, clientSecret }) : verifyMeta({ clientId, clientSecret });
 }
 

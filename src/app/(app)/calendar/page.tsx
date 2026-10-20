@@ -3,6 +3,8 @@ import { MonthGrid, PostList } from "@/components/calendar/CalendarView";
 import { requireUser } from "@/lib/auth";
 import { listChannels } from "@/lib/channels";
 import { listPostsByStatus, listPostsInRange } from "@/lib/posts";
+import { safeZone } from "@/lib/schedule";
+import { dayKey } from "@/lib/tzfmt";
 
 export const metadata = { title: "Calendar & queue" };
 
@@ -17,8 +19,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const user = await requireUser();
   const sp = await searchParams;
   const view = VIEWS.some((v) => v.key === sp.view) ? sp.view! : "month";
-  const now = new Date();
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const tz = safeZone(user.preferences.timezone);
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : dayKey(new Date(), tz).slice(0, 7);
   const [y, m] = month.split("-").map(Number) as [number, number];
 
   const channels = await listChannels(user.id);
@@ -28,19 +30,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   if (view === "month") {
     // Pad a week either side so time zones and leading/trailing days are covered.
     const posts = await listPostsInRange(user.id, new Date(Date.UTC(y, m - 1, 1) - 8 * 864e5), new Date(Date.UTC(y, m, 1) + 8 * 864e5));
-    content = <MonthGrid month={month} posts={posts} platforms={platforms} />;
+    content = <MonthGrid month={month} posts={posts} platforms={platforms} tz={tz} />;
   } else if (view === "queue") {
     const posts = (await listPostsByStatus(user.id, ["scheduled", "publishing"])).sort(
       (a, b) => +new Date(a.scheduledAt ?? 0) - +new Date(b.scheduledAt ?? 0),
     );
-    content = <PostList posts={posts} platforms={platforms} empty="Nothing scheduled. Create a post and pick a time." />;
+    content = <PostList posts={posts} platforms={platforms} tz={tz} empty="Nothing scheduled. Create a post and pick a time." />;
   } else if (view === "drafts") {
-    content = <PostList posts={await listPostsByStatus(user.id, ["draft"])} platforms={platforms} empty="No drafts." />;
+    content = <PostList posts={await listPostsByStatus(user.id, ["draft"])} platforms={platforms} tz={tz} empty="No drafts." />;
   } else {
     const posts = (await listPostsByStatus(user.id, ["published", "partial", "failed"], 200)).sort(
       (a, b) => +new Date(b.publishedAt ?? b.updatedAt) - +new Date(a.publishedAt ?? a.updatedAt),
     );
-    content = <PostList posts={posts} platforms={platforms} empty="Nothing published yet." />;
+    content = <PostList posts={posts} platforms={platforms} tz={tz} empty="Nothing published yet." />;
   }
 
   return (

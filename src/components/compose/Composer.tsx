@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { bestTimesAction, draftPostAction } from "@/app/actions/ai";
 import { getPlaylistsAction } from "@/app/actions/channels";
 import { deletePostAction, duplicatePostAction, retryTargetAction, savePostAction, type SavePostResult } from "@/app/actions/posts";
 import type { MediaAsset, Post, PostTarget, TargetOptions } from "@/db/schema";
 import type { PublicChannel } from "@/lib/channels";
 import { countHashtags, LIMITS, validateTarget, YOUTUBE_CATEGORIES } from "@/lib/rules";
+import { fmtDateTime, fmtWeekdayTime, fromLocalInput, localInput } from "@/lib/tzfmt";
 import { PLATFORM_LABEL, PlatformIcon } from "../icons";
 import { MediaLibrary } from "../media/MediaLibrary";
 import { MediaThumb } from "../media/MediaThumb";
@@ -21,11 +23,6 @@ interface TargetDraft {
 type PostWithTargets = Post & { targets: PostTarget[] };
 
 const EDITABLE: Post["status"][] = ["draft", "scheduled", "failed"];
-
-function toLocalInput(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function defaultsFor(channel: PublicChannel): TargetOptions {
   const yt = channel.settings.youtube;
@@ -52,6 +49,7 @@ export function Composer({
   blob,
   initialDate,
   flash,
+  tz,
 }: {
   channels: PublicChannel[];
   library: MediaAsset[];
@@ -60,6 +58,7 @@ export function Composer({
   blob: boolean;
   initialDate?: string;
   flash?: string;
+  tz: string;
 }) {
   const router = useRouter();
   const readOnly = post ? !EDITABLE.includes(post.status) : false;
@@ -69,11 +68,11 @@ export function Composer({
   const [targets, setTargets] = useState<Record<string, TargetDraft>>(() =>
     Object.fromEntries((post?.targets ?? []).map((t) => [t.channelId, { caption: t.caption, options: t.options }])),
   );
-  const [mode, setMode] = useState<"now" | "schedule" | "draft">(post?.status === "scheduled" || initialDate ? "schedule" : "now");
+  const [mode, setMode] = useState<"now" | "queue" | "schedule" | "draft">(post?.status === "scheduled" || initialDate ? "schedule" : "now");
   const [when, setWhen] = useState(() => {
-    if (post?.scheduledAt && new Date(post.scheduledAt) > new Date()) return toLocalInput(new Date(post.scheduledAt));
-    const picked = initialDate ? new Date(`${initialDate}T10:00`) : null;
-    return toLocalInput(picked && picked > new Date() ? picked : new Date(Date.now() + 3600_000));
+    if (post?.scheduledAt && new Date(post.scheduledAt) > new Date()) return localInput(new Date(post.scheduledAt), tz);
+    const picked = initialDate ? fromLocalInput(`${initialDate}T10:00`, tz) : null;
+    return localInput(picked && picked > new Date() ? picked : new Date(Date.now() + 3600_000), tz);
   });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [result, setResult] = useState<SavePostResult | undefined>(flash ? { ok: true, postId: post?.id ?? "", message: flash } : undefined);
@@ -110,11 +109,12 @@ export function Composer({
         mediaIds,
         targets: selected.map((c) => ({ channelId: c.id, caption: targets[c.id]!.caption, options: targets[c.id]!.options })),
         mode,
-        scheduledAt: mode === "schedule" ? new Date(when).toISOString() : undefined,
+        scheduledAt: mode === "schedule" ? fromLocalInput(when, tz).toISOString() : undefined,
       });
+      const at = res.ok && "scheduledAt" in res && res.scheduledAt ? new Date(res.scheduledAt) : fromLocalInput(when, tz);
       const message =
-        res.ok && mode === "schedule"
-          ? `Scheduled for ${new Date(when).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}.`
+        res.ok && (mode === "schedule" || mode === "queue")
+          ? `${mode === "queue" ? "Added to the queue for" : "Scheduled for"} ${fmtDateTime(at, tz)}.`
           : res.message;
       setResult({ ...res, message });
       if (res.ok || "postId" in res) {
@@ -125,7 +125,7 @@ export function Composer({
     });
   }
 
-  if (readOnly && post) return <PostStatusView post={post} channels={channels} media={media} flash={flash} />;
+  if (readOnly && post) return <PostStatusView post={post} channels={channels} media={media} flash={flash} tz={tz} />;
 
   const previewChannel = selected.find((c) => c.id === previewId) ?? selected[0];
 
@@ -228,6 +228,29 @@ export function Composer({
             onChange={(e) => setCaption(e.target.value)}
             placeholder="Write once. Customize per platform below if you need to."
           />
+          <AiAssist
+            caption={caption}
+            channels={selected}
+            targets={targets}
+            media={media}
+            onCaption={setCaption}
+            onTailored={(list) =>
+              setTargets((cur) => {
+                const next = { ...cur };
+                for (const v of list) {
+                  const t = next[v.id];
+                  if (!t) continue;
+                  const ch = channels.find((c) => c.id === v.id);
+                  const options = { ...t.options };
+                  if (ch?.platform === "youtube") {
+                    options.youtube = { ...options.youtube, title: v.title.slice(0, 100) || options.youtube?.title, tags: options.youtube?.tags || v.tags };
+                  }
+                  next[v.id] = { caption: v.caption, options };
+                }
+                return next;
+              })
+            }
+          />
           <p className="mt-1.5 flex flex-wrap gap-x-4 text-xs text-muted">
             <span>{caption.length} characters</span>
             <span className={countHashtags(caption) > LIMITS.instagramHashtags ? "text-red-600" : ""}>{countHashtags(caption)} hashtags</span>
@@ -255,15 +278,22 @@ export function Composer({
         <section className="card p-5">
           <h2 className="mb-3 text-sm font-semibold">When</h2>
           <div className="space-y-2 text-sm">
-            {(["now", "schedule", "draft"] as const).map((m) => (
+            {(["now", "queue", "schedule", "draft"] as const).map((m) => (
               <label key={m} className="flex items-center gap-2">
-                <input type="radio" name="mode" checked={mode === m} onChange={() => setMode(m)} />
-                {m === "now" ? "Publish now" : m === "schedule" ? "Schedule" : "Save as draft"}
+                <input type="radio" name="mode" value={m} checked={mode === m} onChange={() => setMode(m)} />
+                {m === "now" ? "Publish now" : m === "queue" ? "Add to queue" : m === "schedule" ? "Schedule" : "Save as draft"}
               </label>
             ))}
           </div>
+          {mode === "queue" && (
+            <p className="mt-2 text-xs text-muted">Books the next free time from these channels’ posting queues. Set queue times in each channel’s settings.</p>
+          )}
           {mode === "schedule" && (
-            <input type="datetime-local" className="input mt-3" value={when} min={toLocalInput(new Date())} onChange={(e) => setWhen(e.target.value)} />
+            <>
+              <input type="datetime-local" className="input mt-3" value={when} min={localInput(new Date(), tz)} onChange={(e) => setWhen(e.target.value)} aria-describedby="when-zone" />
+              <p id="when-zone" className="mt-1 text-xs text-muted">Times are in {tz.replaceAll("_", " ")}. <Link href="/settings/api#ai" className="hover:text-brand">Change</Link></p>
+              <BestTimes channelIds={selected.map((c) => c.id)} tz={tz} onPick={(d) => setWhen(localInput(d, tz))} />
+            </>
           )}
           {result && (
             <p
@@ -274,7 +304,7 @@ export function Composer({
             </p>
           )}
           <button type="button" className="btn-primary mt-4 w-full" disabled={pending || blocking} onClick={submit}>
-            {pending ? (mode === "now" ? "Publishing…" : "Saving…") : mode === "now" ? `Publish to ${selected.length || ""} ${selected.length === 1 ? "channel" : "channels"}` : mode === "schedule" ? "Schedule" : "Save draft"}
+            {pending ? (mode === "now" ? "Publishing…" : "Saving…") : mode === "now" ? `Publish to ${selected.length || ""} ${selected.length === 1 ? "channel" : "channels"}` : mode === "queue" ? "Add to queue" : mode === "schedule" ? "Schedule" : "Save draft"}
           </button>
           {blocking && selected.length > 0 && <p className="mt-2 text-xs text-red-600 dark:text-red-400">Fix the issues marked on each channel first.</p>}
           {post && (
@@ -323,6 +353,153 @@ export function Composer({
             />
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function formatFor(c: PublicChannel, t: TargetDraft | undefined, media: MediaAsset[]) {
+  const videos = media.filter((m) => m.kind === "video").length;
+  const images = media.length - videos;
+  if (c.platform === "youtube") return "video";
+  if (c.platform === "instagram") {
+    const f = t?.options.instagram?.format ?? "feed";
+    if (f !== "feed") return f;
+    return media.length > 1 ? `carousel of ${media.length}` : videos ? "video post" : "photo post";
+  }
+  return videos ? "video" : images > 1 ? `${images} photos` : images ? "photo" : "text post";
+}
+
+const AI_ACTIONS = [
+  { key: "write", label: "Write caption", instruction: "Write a caption for this post from the brief." },
+  { key: "shorter", label: "Shorter", instruction: "Rewrite the current caption to be about half as long, keeping the key message." },
+  { key: "engaging", label: "More engaging", instruction: "Rewrite the current caption with a stronger hook and a clear call to action." },
+  { key: "hashtags", label: "Add hashtags", instruction: "Keep the current caption exactly and add 5 to 8 relevant hashtags at the end." },
+] as const;
+
+function AiAssist({
+  caption,
+  channels,
+  targets,
+  media,
+  onCaption,
+  onTailored,
+}: {
+  caption: string;
+  channels: PublicChannel[];
+  targets: Record<string, TargetDraft>;
+  media: MediaAsset[];
+  onCaption: (v: string) => void;
+  onTailored: (v: { id: string; caption: string; title: string; tags: string }[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [brief, setBrief] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string }>();
+  const mediaLine = media.length ? `${media.filter((m) => m.kind === "image").length} photo(s), ${media.filter((m) => m.kind === "video").length} video(s)` : "";
+
+  async function run(key: string, instruction: string, tailor: boolean) {
+    if (!brief.trim() && !caption.trim()) return setNote({ ok: false, text: "Describe the post or write a first draft, then ask the assistant." });
+    setBusy(key);
+    setNote(undefined);
+    const r = await draftPostAction({
+      brief,
+      current: caption,
+      instruction,
+      media: mediaLine,
+      channels: tailor ? channels.map((c) => ({ id: c.id, format: formatFor(c, targets[c.id], media) })) : [],
+    }).catch((err: Error) => ({ ok: false as const, message: err.message }));
+    setBusy(null);
+    if (!r.ok) return setNote({ ok: false, text: r.message });
+    if (tailor) {
+      onTailored(r.draft.channels);
+      if (!caption.trim()) onCaption(r.draft.caption);
+      setNote({ ok: true, text: `Wrote a version for each of ${r.draft.channels.length} channels below. Review before posting.` });
+    } else {
+      onCaption(r.draft.caption);
+      setNote({ ok: true, text: "Caption updated. Edit it as you like." });
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      {!open ? (
+        <button type="button" className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setOpen(true)}>
+          <span aria-hidden>✦</span> AI assist
+        </button>
+      ) : (
+        <div className="space-y-3 rounded-lg border border-brand/30 bg-brand/5 p-3">
+          <div className="flex items-center justify-between">
+            <label htmlFor="ai-brief" className="text-xs font-semibold text-brand">✦ AI assist</label>
+            <button type="button" className="text-xs text-muted hover:text-ink" onClick={() => setOpen(false)}>Close</button>
+          </div>
+          <textarea
+            id="ai-brief"
+            className="input min-h-16 bg-panel"
+            placeholder="What's this post about? Key points, offer, audience, links…"
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
+            {AI_ACTIONS.map((a) => (
+              <button key={a.key} type="button" className="btn-ghost px-3 py-1.5 text-xs" disabled={busy !== null || (a.key !== "write" && !caption.trim())} onClick={() => run(a.key, a.instruction, false)}>
+                {busy === a.key ? "Working…" : a.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn-primary px-3 py-1.5 text-xs"
+              disabled={busy !== null || !channels.length}
+              title={channels.length ? "" : "Pick channels first"}
+              onClick={() => run("tailor", "Write a version tailored to each channel's platform and format.", true)}
+            >
+              {busy === "tailor" ? "Working…" : "Tailor for each channel"}
+            </button>
+          </div>
+          {note && (
+            <p role="status" className={`text-xs ${note.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+              {note.text}
+              {!note.ok && /API key/.test(note.text) && (
+                <> <Link className="underline" href="/settings/api#ai">Add it now</Link></>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BestTimes({ channelIds, tz, onPick }: { channelIds: string[]; tz: string; onPick: (d: Date) => void }) {
+  const [times, setTimes] = useState<{ at: string; reason: string }[] | null>(null);
+  const key = channelIds.join(",");
+  useEffect(() => {
+    let live = true;
+    setTimes(null);
+    bestTimesAction(key ? key.split(",") : [])
+      .then((t) => live && setTimes(t))
+      .catch(() => live && setTimes([]));
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  if (times && !times.length) return null;
+  return (
+    <div className="mt-3">
+      <p className="label">Best times</p>
+      {times === null ? (
+        <p className="text-xs text-muted">Finding good times…</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {times.map((t) => (
+            <li key={t.at}>
+              <button type="button" className="w-full rounded-lg border border-line px-3 py-1.5 text-left text-xs hover:border-brand" onClick={() => onPick(new Date(t.at))} title={t.reason}>
+                <span className="font-medium">{fmtWeekdayTime(new Date(t.at), tz)}</span>
+                <span className="block text-muted">{t.reason}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -587,13 +764,13 @@ function TargetStatusList({ post, channels }: { post: PostWithTargets; channels:
   );
 }
 
-function PostStatusView({ post, channels, media, flash }: { post: PostWithTargets; channels: PublicChannel[]; media: MediaAsset[]; flash?: string }) {
+function PostStatusView({ post, channels, media, flash, tz }: { post: PostWithTargets; channels: PublicChannel[]; media: MediaAsset[]; flash?: string; tz: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <section className="card space-y-4 p-5">
         {flash && <p role="status" className="rounded-lg bg-brand/10 px-3 py-2 text-sm text-brand">{flash}</p>}
         <p className="text-sm text-muted">
-          {post.publishedAt ? `Published ${new Date(post.publishedAt).toLocaleString()}` : "Publishing in progress"}. Posts that have gone out can’t be edited here; duplicate to reuse it.
+          {post.publishedAt ? `Published ${fmtDateTime(new Date(post.publishedAt), tz)}` : "Publishing in progress"}. Posts that have gone out can’t be edited here; duplicate to reuse it.
         </p>
         {media.length > 0 && (
           <div className="flex gap-3 overflow-x-auto">

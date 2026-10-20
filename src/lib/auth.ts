@@ -38,7 +38,7 @@ export async function destroySession(): Promise<void> {
   jar.delete(SESSION_COOKIE);
 }
 
-export type SessionUser = Pick<User, "id" | "email" | "name">;
+export type SessionUser = Pick<User, "id" | "email" | "name" | "preferences">;
 
 /** The signed-in user for this request, or null. Cached per request. */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
@@ -46,7 +46,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (!token) return null;
   const db = await getDb();
   const [row] = await db
-    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, preferences: schema.users.preferences })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
     .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date())))
@@ -58,4 +58,12 @@ export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   return user;
+}
+
+export async function savePreferences(userId: string, patch: Partial<User["preferences"]>) {
+  const db = await getDb();
+  const [row] = await db.select({ preferences: schema.users.preferences }).from(schema.users).where(eq(schema.users.id, userId));
+  const next = { ...row?.preferences, ...patch };
+  await db.update(schema.users).set({ preferences: next }).where(eq(schema.users.id, userId));
+  return next;
 }
